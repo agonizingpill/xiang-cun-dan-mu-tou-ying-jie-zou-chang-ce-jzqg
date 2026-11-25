@@ -52,10 +52,12 @@ Compose 运行 Nginx、Python FastAPI、独立 Redis 消费进程、SQL 数据�
 |---|---|---|
 | 场地配电和投影线 | `/venues` /venues/sign-venue | `frontend/src/pages/venues.js` |
 | 试投节奏轨迹 | `/cue_tracks` /cue_tracks/record-track，/cue_tracks/lock-track | `frontend/src/pages/cue_tracks.js` |
-| 对场节奏簇 | `/cue_clusters` /cue_clusters/compare-cues，/cue_clusters/save-cluster | `frontend/src/pages/cue_clusters.js` |
+| 对场节奏簇 | `/cue_clusters` /cue_clusters/compare-cues，/cue_clusters/open-review，/cue_clusters/vote，/cue_clusters/adjudicate-cluster（/cue_clusters/save-cluster 保留为开启/投票别名） | `frontend/src/pages/cue_clusters.js` |
 | 交场分路回单 | `/cue_routing` /cue_routing/share-cue，/cue_routing/record-separate | `frontend/src/pages/cue_routing.js` |
 
 SQL 实体与约束在 `backend/domain` 下维护。前端使用原生 ES modules。核心算子为 DTW + 凝聚层次聚类。以绝对时间差为局部代价，DTW 归一化后作为层次聚类的距离矩阵，簇内总距离最短的轨迹为代表。
+
+节奏簇签出改为双人盲选：首次开启/投票时冻结该次比较的原始成员候选；两人交齐前接口只回显本人选择。两人选择相同即结案并签簇，不同则由未投过票的第三位领班按冻结候选裁决。投票按 `(案件, 领班)` 唯一去重，行锁与唯一约束共同保证并发提交和重试只计一票；比较凭据过期后仍使用库内候选快照。合用结果落定时按最终签出样板重新计算 DTW 距离。
 
 拍点与场地端为模拟记录。应用产出路线回单，无线路开关控制。
 

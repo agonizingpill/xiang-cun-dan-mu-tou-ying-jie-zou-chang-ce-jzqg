@@ -37,4 +37,9 @@ def health():
 
 @app.get('/compute/{token}')
 def compute(token: str, user=Depends(auth.actor)):
-    return view(user, token)
+    data = view(user, token)
+    if data.get('status') == 'ready':
+        from domain.cue_clusters_service import remember_comparison_view
+        with transaction() as conn:
+            remember_comparison_view(conn, user, token, data)
+    return data

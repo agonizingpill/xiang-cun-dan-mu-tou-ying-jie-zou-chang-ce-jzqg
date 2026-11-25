@@ -18,12 +18,34 @@ def submit(user, payload):
         pipe.execute()
     return {'token': token, 'status': 'queued'}
 
+def _stored_view(token):
+    """Fallback to the database snapshot after the Redis compute TTL expires."""
+    try:
+        from core.db import transaction
+        from domain.cue_clusters_model import cue_cluster_comparisons
+        from sqlalchemy import select
+        with transaction() as conn:
+            row = conn.execute(select(cue_cluster_comparisons).where(
+                cue_cluster_comparisons.c.token == token)).mappings().first()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    record = dict(row['run'] or {})
+    if row.get('owner'):
+        record.setdefault('owner', row['owner'])
+    return record
+
+
 def view(user, token):
     raw = broker.get(f'compute:{token}')
     if raw is None:
-        raise HTTPException(404, detail='计算任务不存在或已过期')
-    record = json.loads(raw)
-    if record['owner'] != user['sub'] and user['role'] != 'reviewer':
+        record = _stored_view(token)
+        if record is None:
+            raise HTTPException(404, detail='计算任务不存在或已过期')
+    else:
+        record = json.loads(raw)
+    if record.get('owner') != user['sub'] and user['role'] != 'reviewer':
         raise HTTPException(403, detail='仅提交人和复核员可查看计算')
     return {k: v for k, v in record.items() if k != 'owner'}
 

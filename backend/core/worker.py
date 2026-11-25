@@ -3,6 +3,8 @@ from pathlib import Path
 from traceback import print_exc
 
 from core.queueing import QUEUE, broker
+from core.db import transaction
+from domain.cue_clusters_service import _store_comparison
 from domain.learning import calculate
 
 pulse = Path('/tmp/compute-heartbeat')
@@ -23,6 +25,12 @@ def serve():
         except Exception:
             print_exc()
             status.update(status='rejected', detail='计算失败，请检查输入和 worker 日志')
+        if status.get('status') == 'ready':
+            try:
+                with transaction() as db:
+                    _store_comparison(db, {'sub': job['owner']}, job['token'], status)
+            except Exception:
+                print_exc()
         with broker.pipeline() as pipe:
             pipe.set(f'compute:{job["token"]}', json.dumps(status, allow_nan=False), ex=86400)
             pipe.lrem(f'{QUEUE}:processing', 1, item)
